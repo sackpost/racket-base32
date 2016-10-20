@@ -1,3 +1,3 @@
 #lang setup/infotab
 
-(define scribblings '(("base32.scrbl" (multi-page))))
+(define scribblings '(("base32.scrbl")))
