@@ -10,8 +10,8 @@
 (define-values (base32-digit digit-base32)
   (let ([bd (make-vector 256 #f)] [db (make-vector 32 #f)])
     (for ([r ranges] #:when #t
-          [i (in-range (bytes-ref (car r) 0) (add1 (bytes-ref (car r) 1)))]
-          [n (in-naturals (cadr r))])
+                     [i (in-range (bytes-ref (car r) 0) (add1 (bytes-ref (car r) 1)))]
+                     [n (in-naturals (cadr r))])
       (vector-set! bd i n)
       (vector-set! db n i))
     (values (vector->immutable-vector bd) (vector->immutable-vector db))))
@@ -24,15 +24,15 @@
 (define (base32-decode-stream in out)
   (let loop ([data 0] [bits 0])
     (if (>= bits 8)
-      (let ([bits (- bits 8)])
-        (write-byte (arithmetic-shift data (- bits)) out)
-        (loop (bitwise-and data (vector-ref ones bits)) bits))
-      (let ([c (read-byte in)])
-        (unless (or (eof-object? c) (eq? c =byte))
-          (let ([v (vector-ref base32-digit c)])
-            (if v
-              (loop (+ (arithmetic-shift data 5) v) (+ bits 5))
-              (loop data bits))))))))
+        (let ([bits (- bits 8)])
+          (write-byte (arithmetic-shift data (- bits)) out)
+          (loop (bitwise-and data (vector-ref ones bits)) bits))
+        (let ([c (read-byte in)])
+          (unless (or (eof-object? c) (eq? c =byte))
+            (let ([v (vector-ref base32-digit c)])
+              (if v
+                  (loop (+ (arithmetic-shift data 5) v) (+ bits 5))
+                  (loop data bits))))))))
 
 (define (base32-encode-stream in out [linesep #"\n"])
   (let loop ([data 0] [bits 0] [width 0])
@@ -43,18 +43,18 @@
         (when (zero? width) (display linesep out))
         width))
     (if (>= bits 5)
-      (let ([bits (- bits 5)])
-        (loop (bitwise-and data (vector-ref ones bits)) bits (write-char)))
-      (let ([c (read-byte in)])
-        (if (eof-object? c)
-          ;; flush extra bits
-          (begin
-            (let ([width (if (> bits 0) (write-char) width)])
-              (when (> width 0)
-                (for ([i (in-range (modulo (- width) 4))])
-                  (write-byte =byte out))
-                (display linesep out))))
-          (loop (+ (arithmetic-shift data 8) c) (+ bits 8) width))))))
+        (let ([bits (- bits 5)])
+          (loop (bitwise-and data (vector-ref ones bits)) bits (write-char)))
+        (let ([c (read-byte in)])
+          (if (eof-object? c)
+              ;; flush extra bits
+              (begin
+                (let ([width (if (> bits 0) (write-char) width)])
+                  (when (> width 0)
+                    (for ([i (in-range (modulo (- width) 8))])
+                      (write-byte =byte out))
+                    (display linesep out))))
+              (loop (+ (arithmetic-shift data 8) c) (+ bits 8) width))))))
 
 (define (base32-decode src)
   (let ([s (open-output-bytes)])
@@ -65,3 +65,35 @@
   (let ([s (open-output-bytes)])
     (base32-encode-stream (open-input-bytes src) s linesep)
     (get-output-bytes s)))
+
+
+(module+ test
+  (require rackunit)
+  
+  ;; Testcases from https://tools.ietf.org/html/rfc4648
+  
+  ;; Test encode
+  (check-equal? (base32-encode #"" #"")  #"")
+  (check-equal? (base32-encode #"f" #"") #"MY======")
+  (check-equal? (base32-encode #"fo" #"") #"MZXQ====")
+  (check-equal? (base32-encode #"foo" #"") #"MZXW6===")
+  (check-equal? (base32-encode #"foob" #"") #"MZXW6YQ=")
+  (check-equal? (base32-encode #"fooba" #"") #"MZXW6YTB")
+  (check-equal? (base32-encode #"foobar" #"") #"MZXW6YTBOI======")
+  
+  ;; Test decode
+  (check-equal? (base32-decode #"")  #"")
+  (check-equal? (base32-decode #"MY======") #"f")
+  (check-equal? (base32-decode #"MZXQ====") #"fo")
+  (check-equal? (base32-decode #"MZXW6===") #"foo")
+  (check-equal? (base32-decode #"MZXW6YQ=") #"foob")
+  (check-equal? (base32-decode #"MZXW6YTB") #"fooba")
+  (check-equal? (base32-decode #"MZXW6YTBOI======") #"foobar")
+  
+  ;; Test encode and decode
+  (check-true (andmap (lambda (x) (equal? (base32-decode (base32-encode x)) x))
+                      (list #"" #"abc" #"ABCDEFGHIJKLMNOPQRS" #"\0\1\2\3"
+                            #"foo" #"foobar")))
+              
+              
+              )
